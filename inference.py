@@ -1,12 +1,19 @@
+import os
 import random
 
 from env import TrafficEnv
 from grader import grade
 from models import Action
 
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+MODEL_NAME = os.getenv("MODEL_NAME", "baseline-agent")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+# optional
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME")
+
 TASK_NAME = "easy"
 BENCHMARK = "traffic-control"
-MODEL_NAME = "baseline-agent"
 MAX_STEPS = 50
 
 
