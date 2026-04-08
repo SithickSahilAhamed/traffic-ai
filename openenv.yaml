@@ -1,0 +1,17 @@
+name: traffic-control-env
+description: AI-based traffic signal optimization
+
+observation_space:
+  - lane1
+  - lane2
+  - light
+  - emergency
+
+action_space:
+  - 0
+  - 1
+
+tasks:
+  - easy
+  - medium
+  - hard
