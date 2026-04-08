@@ -13,28 +13,51 @@ client = OpenAI(
 env = TrafficEnv()
 
 
+def obs_to_dict(obs):
+    if isinstance(obs, dict):
+        return obs
+    if hasattr(obs, "model_dump"):
+        return obs.model_dump()
+    if hasattr(obs, "dict"):
+        return obs.dict()
+    return {
+        "lane1": getattr(obs, "lane1", 0),
+        "lane2": getattr(obs, "lane2", 0),
+        "light": getattr(obs, "light", 0),
+        "emergency": getattr(obs, "emergency", 0),
+    }
+
+
 def get_action(obs):
+    obs_data = obs_to_dict(obs)
     prompt = f"""
 Traffic Control Decision:
 
-Lane1: {obs['lane1']}
-Lane2: {obs['lane2']}
-Emergency: {obs['emergency']}
+Lane1: {obs_data['lane1']}
+Lane2: {obs_data['lane2']}
+Emergency: {obs_data['emergency']}
 
 Choose:
-0 6 Lane1 green
-1 6 Lane2 green
+0 -> Lane1 green
+1 -> Lane2 green
 
 Answer only 0 or 1.
 """
 
-    response = client.chat.completions.create(
-        model=os.environ.get("MODEL_NAME"),
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
+    try:
+        response = client.chat.completions.create(
+            model=os.environ.get("MODEL_NAME"),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0
+        )
+        content = response.choices[0].message.content.strip()
+        for ch in content:
+            if ch in ("0", "1"):
+                return int(ch)
+    except Exception as exc:
+        print(f"[ERROR] action_error={exc}")
 
-    return int(response.choices[0].message.content.strip())
+    return 0
 
 
 def run_episode():
