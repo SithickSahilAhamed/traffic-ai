@@ -1,0 +1,19 @@
+[project]
+name = "traffic-ai-openenv"
+version = "0.1.0"
+description = "AI Traffic Signal Control using OpenEnv"
+authors = [{ name = "Sahil" }]
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "numpy",
+    "pygame-ce",
+    "matplotlib",
+    "torch",
+    "requests",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
