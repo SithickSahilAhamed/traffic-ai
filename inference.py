@@ -1,5 +1,4 @@
 import os
-import random
 
 from env import TrafficEnv
 from grader import grade
@@ -42,12 +41,12 @@ def run_episode():
     log_start()
 
     for step in range(1, MAX_STEPS + 1):
-        # simple intelligent policy
-        desired_light = 0 if env.lane1 > env.lane2 else 1
-        if env.light != desired_light:
-            action = 1  # switch
+        observation = obs.model_dump() if hasattr(obs, "model_dump") else obs.dict()
+
+        if observation["lane1"] > observation["lane2"]:
+            action = 0
         else:
-            action = 0  # stay
+            action = 1
 
         obs, reward, done, _ = env.step(Action(action=action))
 
