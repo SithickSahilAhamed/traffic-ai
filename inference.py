@@ -7,10 +7,9 @@ from env import TrafficEnv
 BASE_URL = os.getenv("API_BASE_URL")
 API_KEY = os.getenv("API_KEY")
 
+client = None
 if BASE_URL and API_KEY:
     client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
-else:
-    client = None
 
 env = TrafficEnv()
 
@@ -34,25 +33,33 @@ def obs_to_dict(obs):
 
 def get_action(obs):
     obs_data = obs_to_dict(obs)
-    if client:
-        response = client.chat.completions.create(
-            model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-            messages=[
-                {
-                    "role": "user",
-                    "content": (
-                        f"lane1={obs_data['lane1']}, lane2={obs_data['lane2']}"
-                    ),
-                }
-            ],
-        )
-        decision = response.choices[0].message.content.strip()
-    else:
-        decision = "1" if obs_data["lane2"] > obs_data["lane1"] else "0"
+    try:
+        if client:
+            response = client.chat.completions.create(
+                model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (
+                            f"lane1={obs_data['lane1']}, "
+                            f"lane2={obs_data['lane2']}. "
+                            "Reply ONLY 0 or 1."
+                        ),
+                    }
+                ],
+                temperature=0,
+            )
 
-    if "1" in decision:
-        return 1
-    return 0
+            decision = response.choices[0].message.content.strip()
+
+            if "1" in decision:
+                return 1
+            return 0
+
+        return 1 if obs_data["lane2"] > obs_data["lane1"] else 0
+    except Exception as exc:
+        print(f"[ERROR] LLM failed: {exc}")
+        return 1 if obs_data["lane2"] > obs_data["lane1"] else 0
 
 
 def run_episode():
