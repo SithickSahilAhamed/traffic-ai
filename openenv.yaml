@@ -1,17 +1,11 @@
-name: traffic-control-env
-description: AI-based traffic signal optimization
-
-observation_space:
-  - lane1
-  - lane2
-  - light
-  - emergency
-
-action_space:
-  - 0
-  - 1
+name: traffic-ai-openenv
 
 tasks:
-  - easy
-  - medium
-  - hard
+  - id: easy
+    grader: grader.grade
+
+  - id: medium
+    grader: grader.grade
+
+  - id: hard
+    grader: grader.grade

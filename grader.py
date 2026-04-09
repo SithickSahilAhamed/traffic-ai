@@ -2,17 +2,14 @@ def grade(episode_result):
     rewards = episode_result.get("rewards", [])
 
     if not rewards:
-        return 0.1  # avoid zero
+        return 0.1
 
     total_reward = sum(rewards)
 
-    # Normalize score into (0,1)
-    score = (100 + total_reward) / 200
+    # Safer normalization
+    score = 1 / (1 + abs(total_reward) / 100)
 
-    # Clamp STRICTLY between (0,1)
-    if score <= 0:
-        score = 0.01
-    elif score >= 1:
-        score = 0.99
+    # Force inside (0,1)
+    score = max(0.01, min(0.99, score))
 
-    return score
+    return float(score)
