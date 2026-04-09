@@ -6,10 +6,9 @@ def grade(episode_result):
 
     total_reward = sum(rewards)
 
-    # Safer normalization
     score = 1 / (1 + abs(total_reward) / 100)
 
-    # Force inside (0,1)
+    # STRICT range (0,1)
     score = max(0.01, min(0.99, score))
 
     return float(score)
