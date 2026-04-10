@@ -1,57 +1,165 @@
-# traffic-ai
+---
+title: Traffic AI OpenEnv
+emoji: 🚦
+colorFrom: red
+colorTo: yellow
+sdk: docker
+pinned: false
+tags:
+  - openenv
+---
 
-A minimal traffic signal control demo using Q-learning. The environment simulates two lanes with stochastic arrivals. The agent chooses whether to keep or switch the green light to reduce total queue length.
+# 🚦 Traffic Signal Control — OpenEnv Environment
 
-## Project structure
+An AI-based traffic signal control system simulating a 4-way junction.
+An LLM agent decides which lane receives the green signal at each step
+to minimize congestion across three difficulty levels.
 
-- env.py: Environment (core logic)
-- agent.py: Q-learning agent
-- train.py: Training loop
-- evaluate.py: Compare random vs AI
-- visualize.py: Optional demo (prints/plots)
+---
 
-## Quick start
+## 🌍 Environment Description
 
-Install dependencies:
+Real-world motivation: Traffic signal control is a critical urban infrastructure problem.
+Poor signal timing causes congestion, fuel waste, and emergency vehicle delays.
+This environment simulates a 2-lane junction where an AI agent must make
+real-time decisions to keep traffic flowing efficiently.
+
+The agent observes queue lengths, the current signal state, and whether an
+emergency vehicle is present — then decides which lane gets the green light.
+
+---
+
+## 📐 Observation Space
+
+| Field | Type | Description |
+|---|---|---|
+| `lane1` | int | Number of vehicles queued in Lane 1 |
+| `lane2` | int | Number of vehicles queued in Lane 2 |
+| `light` | int (0 or 1) | Current green light (0 = Lane 1, 1 = Lane 2) |
+| `emergency` | int (0 or 1) | Emergency vehicle present (1 = yes) |
+
+## ⚡ Action Space
+
+| Action | Meaning |
+|---|---|
+| `0` | Give green signal to Lane 1 |
+| `1` | Give green signal to Lane 2 |
+
+## 🏆 Reward Function
 
 ```
-pip install numpy matplotlib
+reward = -(lane1 + lane2)          # penalize total congestion
+       + 10 if emergency handled correctly
+       - 10 if emergency ignored
 ```
 
-Train the agent:
+Rewards are dense (every step), providing continuous signal throughout the episode.
+
+---
+
+## 📋 Tasks
+
+| Task | Steps | Emergency Prob | Arrival Rate | Difficulty |
+|---|---|---|---|---|
+| `easy` | 20 | 0% | 0–2 cars/step | Low traffic, no emergencies |
+| `medium` | 30 | 10% | 0–4 cars/step | Uneven traffic, occasional emergencies |
+| `hard` | 40 | 25% | 0–7 cars/step | Heavy traffic, frequent emergencies |
+
+### Expected Baseline Scores
+
+| Task | Baseline Score | Notes |
+|---|---|---|
+| `easy` | ~0.72 | Heuristic agent performs well |
+| `medium` | ~0.61 | Emergencies add difficulty |
+| `hard` | ~0.48 | Heavy load challenges any agent |
+
+---
+
+## 🤖 Agent Design (inference.py)
+
+The agent uses a 6-layer hybrid decision stack:
 
 ```
-python train.py
+1. Emergency override      → immediate response
+2. Starvation prevention   → fairness across lanes
+3. Heavy imbalance rule    → fast deterministic path
+4. Value function (pseudo-RL) → learned signal
+5. LLM decision            → ambiguous cases only
+6. Anti-oscillation lock   → stability control
 ```
 
-Evaluate random vs AI:
+LLM is called **only when the decision is genuinely ambiguous** —
+this avoids unnecessary API calls and reduces latency.
+
+---
+
+## 🚀 Setup & Usage
+
+### Environment Variables Required
+
+```bash
+API_BASE_URL=<provided by hackathon>
+API_KEY=<provided by hackathon>
+MODEL_NAME=gpt-4o-mini
+```
+
+### Run Locally
+
+```bash
+pip install fastapi uvicorn openai pydantic openenv-core numpy
+
+# Start the server
+uvicorn app:app --host 0.0.0.0 --port 7860
+
+# Run inference (in another terminal)
+python inference.py
+```
+
+### Docker
+
+```bash
+docker build -t traffic-ai .
+docker run -p 7860:7860 \
+  -e API_BASE_URL=... \
+  -e API_KEY=... \
+  traffic-ai
+```
+
+---
+
+## 🔌 API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/reset` | Reset environment, pass `{"task_id": "easy"}` |
+| POST | `/step` | Take action, pass `{"action": 0}` or `{"action": 1}` |
+| GET | `/state` | Get current environment state |
+| GET | `/tasks` | List all 3 tasks |
+| POST | `/grade` | Run full episode and return graded score |
+| GET | `/health` | Health check |
+
+---
+
+## 📁 Project Structure
 
 ```
-python evaluate.py
+traffic-ai/
+├── app.py          # FastAPI server (OpenEnv endpoints)
+├── env.py          # TrafficEnv — core simulation logic
+├── inference.py    # Hybrid LLM agent — runs all 3 tasks
+├── grader.py       # Score functions for each task
+├── tasks.py        # Task definitions with grader linkage
+├── models.py       # Pydantic models (Observation, Action)
+├── openenv.yaml    # OpenEnv spec
+├── Dockerfile      # Container setup
+└── server/
+    └── app.py      # Mirror of app.py (multi-mode support)
 ```
 
-Visualize a demo curve:
+---
 
-```
-python visualize.py
-```
+## 📊 Grader Design
 
-Note: evaluate.py creates a new agent. For a real comparison, run training and reuse the trained Q-table (for example, by adding save/load with numpy). This keeps the script simple for judging.
-
-## Judge-ready talking points
-
-Q1: Why this reward function?
-- We minimize cumulative waiting time by penalizing total queued cars. This is a real-world congestion metric.
-
-Q2: Why reinforcement learning?
-- Rule-based controllers fail under stochastic, time-varying traffic. RL adapts to dynamic arrivals and learned patterns.
-
-Q3: What is the novelty?
-- A compact, auditable simulation with dynamic traffic and a learned policy that outperforms a random baseline.
-
-## Winner-level upgrades (next steps)
-
-- Priority vehicles: add a fast-clear requirement and larger penalties when blocked.
-- Switching penalty: discourage frequent toggling to reduce unsafe rapid switching.
-- Weather effects: slow passing rates during rain or fog.
-- Multi-intersection grid: add coordination across multiple lights.
+Scores are computed using `1 / (1 + |avg_reward|)` normalized through
+a sigmoid function — mathematically guaranteed to stay strictly in (0, 1).
+Boundary values 0.0 and 1.0 are impossible by design.
