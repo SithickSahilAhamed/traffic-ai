@@ -1,30 +1,118 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import Optional
 import uvicorn
-from env import TrafficEnv
 
-app = FastAPI()
+from env import TrafficEnv
+from tasks import TASKS, TASK_MAP, get_tasks
+
+app = FastAPI(title="Traffic Signal Control - OpenEnv")
+
 env = TrafficEnv()
+current_task_id: Optional[str] = None
+episode_rewards: list = []
+
+
+class ResetRequest(BaseModel):
+    task_id: Optional[str] = "easy"
+
+class StepRequest(BaseModel):
+    action: int
 
 
 @app.post("/reset")
-def reset():
-    obs = env.reset()
-    return {"observation": obs}
+def reset(request: ResetRequest = None):
+    global current_task_id, episode_rewards
+
+    task_id = (request.task_id if request else None) or "easy"
+
+    if task_id not in TASK_MAP:
+        raise HTTPException(400, detail=f"Unknown task_id '{task_id}'. Valid: {list(TASK_MAP)}")
+
+    current_task_id = task_id
+    episode_rewards = []
+
+    obs = env.reset(task_id=task_id)
+    return {"observation": obs, "task_id": task_id}
 
 
 @app.post("/step")
-def step(action: dict):
-    obs, reward, done, info = env.step(action["action"])
-    return {
+def step(request: StepRequest):
+    global episode_rewards
+
+    if request.action not in [0, 1]:
+        raise HTTPException(400, detail="Action must be 0 or 1.")
+
+    obs, reward, done, info = env.step(request.action)
+    episode_rewards.append(reward)          # ← collect rewards
+
+    response = {
         "observation": obs,
         "reward": reward,
         "done": done,
-        "info": info
+        "info": info,
+    }
+
+    # On episode end: call grader with the collected reward LIST
+    if done and current_task_id and current_task_id in TASK_MAP:
+        grader_fn = TASK_MAP[current_task_id]["grader"]   # ← actual callable
+        score = grader_fn(episode_rewards)                 # ← pass list
+        response["score"] = score
+        response["info"]["score"] = score
+
+    return response
+
+
+@app.get("/state")
+def state():
+    return {"state": env.state()}
+
+
+@app.get("/tasks")
+def tasks_endpoint():
+    return {"tasks": get_tasks()}
+
+
+@app.post("/grade")
+def grade(request: ResetRequest):
+    """Run a full episode and return the graded score. Used by validator."""
+    task_id = (request.task_id or "easy")
+
+    if task_id not in TASK_MAP:
+        raise HTTPException(400, detail=f"Unknown task_id '{task_id}'")
+
+    task = TASK_MAP[task_id]
+    obs = env.reset(task_id=task_id)
+    rewards = []
+    done = False
+
+    while not done:
+        # Baseline heuristic agent for grading verification
+        action = 0 if obs.get("lane1", 0) >= obs.get("lane2", 0) else 1
+        if obs.get("emergency") == 1:
+            action = 1
+        obs, reward, done, info = env.step(action)
+        rewards.append(reward)
+
+    score = task["grader"](rewards)        # ← pass list directly
+
+    assert 0.0 < score < 1.0, f"Score boundary violation: {score}"
+
+    return {
+        "task_id": task_id,
+        "score": score,
+        "total_reward": sum(rewards),
+        "steps": len(rewards),
     }
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 def main():
-    uvicorn.run("server.app:app", host="0.0.0.0", port=7860)
+    uvicorn.run(app, host="0.0.0.0", port=7860)
 
 
 if __name__ == "__main__":

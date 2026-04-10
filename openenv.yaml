@@ -1,11 +1,36 @@
 name: traffic-ai-openenv
+description: >
+  AI-based traffic signal control at a 4-way junction.
+  An LLM agent assigns green signals to minimize congestion
+  across easy, medium, and hard difficulty scenarios.
+version: "1.0.0"
+
+observation_space:
+  type: object
+  properties:
+    lane1:
+      type: integer
+    lane2:
+      type: integer
+    light:
+      type: integer
+      enum: [0, 1]
+    emergency:
+      type: integer
+      enum: [0, 1]
+
+action_space:
+  type: integer
+  enum: [0, 1]
 
 tasks:
   - id: easy
-    grader: grader.grade
-
+    description: Low traffic balancing with no emergencies over 20 steps.
   - id: medium
-    grader: grader.grade
-
+    description: Uneven traffic handling with occasional emergencies over 30 steps.
   - id: hard
-    grader: grader.grade
+    description: Emergency and traffic optimization under heavy load over 40 steps.
+
+endpoints:
+  reset: /reset
+  step: /step
